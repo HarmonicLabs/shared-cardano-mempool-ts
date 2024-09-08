@@ -1,0 +1,68 @@
+{
+  "name": "@harmoniclabs/shared-cardano-mempool-ts",
+  "version": "0.0.0",
+  "description": "implementation of the cardano mempool based on SharedArrayBuffer in typescript",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "browser": {
+    "worker_threads": false,
+    "node:fs": false,
+    "fs": false
+  },
+  "type": "commonjs",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "jest",
+    "test:debug": "node --nolazy --inspect-brk ./node_modules/jest/bin/jest.js --runInBand --colors --verbose",
+    "clear-jest": "jest --clearCache",
+    "test-watch": "jest --watchman",
+    "test-coverage": "jest --coverage",    "build": "rm -rf ./dist && tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json",
+    "build:light": "tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json",
+    "buidl": "npm run build",
+    "ci": "npm i && npm run test && npm run build",
+    "start": "npm run build:light && npm run start:light",
+    "start:light": "node --enable-source-maps dist/index.js",
+    "dbg": "node --trace_gc --max-old-space-size=24576 --enable-source-maps dist/index.js",
+    "pub": "npm run ci && npm pub",
+    "test:onchain": "cd ./packages/onchain && npm run test",
+    "build:onchain": "cd ./packages/onchain && npm run build",
+    "buidl:onchain": "cd ./packages/onchain && npm run buidl",
+    "ci:onchain": "cd ./packages/onchain && npm run ci",
+    "pub:onchain": "cd ./packages/onchain && npm run ci && npm pub",
+    "test:offchain": "cd ./packages/offchain && npm run test",
+    "build:offchain": "cd ./packages/offchain && npm run build",
+    "buidl:offchain": "cd ./packages/offchain && npm run buidl",
+    "ci:offchain": "cd ./packages/offchain && npm run ci",
+    "pub:offchain": "cd ./packages/offchain && npm run ci && npm pub"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org"
+  },
+  "author": "Michele Nuzzi",
+  "license": "",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HarmonicLabs/plu-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HarmonicLabs/plu-ts/issues"
+  },
+  "homepage": "https://github.com/HarmonicLabs/plu-ts#readme",
+  "dependencies": {
+    "@harmoniclabs/plu-ts": "^0.8.1-dev1",
+    "@harmoniclabs/uint8array-utils": "^1.0.0"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.18.6",
+    "@babel/preset-typescript": "^7.18.6",
+    "@types/jest": "^28.1.4",
+    "@types/node": "^18.14.6",
+    "jest": "^29.4.3",
+    "jest-environment-jsdom": "^29.4.3",
+    "tsc-alias": "^1.7.1",
+    "typescript": "^4.6.3",
+    "v8-profiler-next": "^1.10.0"
+  }
+}
