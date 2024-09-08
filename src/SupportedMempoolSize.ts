@@ -1,7 +1,5 @@
 
 export const TX_HASH_SIZE = 32 as const;
-/** index in the mempool of a given tx */
-export const TX_INDEX_SIZE = 4 as const;
 
 export type SupportedMempoolSize
     = 32768     // 32KB

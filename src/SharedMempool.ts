@@ -1,4 +1,5 @@
 import { getMaxTxAllowed, isSupportedMempoolSize, SupportedMempoolSize } from "./SupportedMempoolSize";
+import { IndexedHash, insertSortedHash } from "./types/IndexedHash";
 import { MempoolAppendResult, MempoolAppendStatus } from "./types/MempoolAppendResult";
 import { MempoolIndex } from "./types/MempoolIndex";
 import { eqMempoolTxHash, forceMempoolTxHash, MempoolTxHash, MempoolTxHashBI, MempoolTxHashLike, U8Arr32 } from "./types/MempoTxHash";
@@ -7,7 +8,7 @@ import { unwrapWaitAsyncResult } from "./utils/unwrapWaitAsyncResult";
 const hasSharedArrayBuffer = typeof globalThis.SharedArrayBuffer !== 'undefined';
 
 const PERFORMING_DROP = 0;
-const NOT_PERFORMING_DROP = 0;
+const NOT_PERFORMING_DROP = 1;
 
 const N_MUTEX_BYTES = 16;
 const N_MUTEX_I32 = N_MUTEX_BYTES / 4;
@@ -22,16 +23,15 @@ const APPEND_QUEQUE_IDX_I32 = 3;
 const APPEND_BYTES_IDX_U8 = APPEND_BYTES_IDX_I32 * 4;
 const AVIABLE_SPACE_IDX_U8 = APPEND_BYTES_IDX_U8 + 1;
 
-export interface SharedMempoolConfig
-{
-
+export interface SharedMempoolArgs  s{
+    
 }
 
-const defaultConfig: SharedMempoolConfig = {
+const defaultConfig: SharedMempoolArgs = {
 
 };
 
-export interface SharedMempoolMetadata extends SharedMempoolConfig
+export interface SharedMempoolConfig extends SharedMempoolArgs
 {
     size: SupportedMempoolSize,
     maxTxs: number,
@@ -57,11 +57,11 @@ export class SharedMempool
      */
     private readonly int32View: Int32Array;
     private readonly u8View: Uint8Array;
-    readonly config: SharedMempoolMetadata;
+    readonly config: SharedMempoolConfig;
 
     constructor(
         sharedMemory: SharedArrayBuffer,
-        config: SharedMempoolConfig
+        config: SharedMempoolArgs
     )
     {
         if (!hasSharedArrayBuffer) throw new Error('SharedArrayBuffer not supported, cannot create SharedMempool');
@@ -172,7 +172,7 @@ export class SharedMempool
         };
     }
 
-    private readIndexes(): MempoolIndex[]
+    private _readAllIndexes(): MempoolIndex[]
     {
         const nTxs = this._getTxNumber();
         const indexes: MempoolIndex[] = new Array( nTxs );
@@ -304,7 +304,6 @@ export class SharedMempool
         .filter( hash => realHashes.some( realHash => eqMempoolTxHash( hash, realHash ) ) );
     }
 
-
     async readTxHashes(): Promise<U8Arr32[]>
     {
         await this.makeSureNoDrop();
@@ -317,22 +316,63 @@ export class SharedMempool
         return hashes.map( hash => new Uint8Array( hash.buffer ) as U8Arr32 );
     }
 
-    private _readTxs( hashes: MempoolTxHash[] ): Uint8Array[]
+    private _continousRead( offset: number, length: number ): Uint8Array
     {
-        const realHashes = this._readTxHashes();
-        const nTxs = realHashes.length; 
-        const txs: Uint8Array[] = new Array( nTxs );
+        const roudnedLength = Math.ceil( length / 8 ) * 8;
+        const buff = new ArrayBuffer( roudnedLength );
+        const bi64 = new BigUint64Array( buff );
+
+        for( let i = 0; i < bi64.length; i++ )
+        {
+            bi64[i] = Atomics.load( this.bi64View, offset );
+            offset += 8;
+        }
+
+        return new Uint8Array( buff, 0, length );
+    }
+
+    private _readTxs( hashes: MempoolTxHash[] ): [ buffs: Uint8Array[], indexes: MempoolIndex[], continousReads: MempoolIndex[] ] | []
+    {
+        const nTxs = this._getTxNumber();
+        const indexedHashes = this._filterByHashPresent( hashes, nTxs );
+        if( indexedHashes.length === 0 ) return [];
+
+        const indexes = indexedHashes.map( ([ _hash, idx ]) => this._readTxIndexAt( idx ));
+
+        const continousReads: MempoolIndex[] = [ { ...indexes[0] } ];
+        let lastTxIndex: number = indexes[0].index;
+        for( let i = 1; i < indexes.length; i++ )
+        {
+            const index = indexes[i];
+            if( index.index === lastTxIndex + 1 )
+            {
+                continousReads[continousReads.length - 1].size += index.size;
+            }
+            else
+            {
+                continousReads.push({ ...index });
+            }
+            lastTxIndex = index.index;
+        }
+
+        const buffs = continousReads.map( ({ index, size }) => this._continousRead( index, size ));
+        
+        return [ buffs, indexes, continousReads ];
     }
 
     async readTxs( hashes: MempoolTxHashLike[] ): Promise<Uint8Array[]>
     {
+        if( hashes.length === 0 ) return [];
         hashes = hashes.map( forceMempoolTxHash );
         await this.makeSureNoDrop();
         this.incrementReadingPeers();
 
-        const txs = this._readTxs( hashes as MempoolTxHash[] );
+        const _txs = this._readTxs( hashes as MempoolTxHash[] );
 
         this.decrementReadingPeers();
+
+        if( _txs.length === 0 ) return [];
+        const [ buffs, indexes, continousReads ] = _txs;
     }
 
     private _incrementAppendQueue(): number
@@ -387,6 +427,29 @@ export class SharedMempool
             ) return true
         }
         return false;
+    }
+
+    private _filterByHashPresent( hashes: MempoolTxHash[], nTxs?: number ): IndexedHash[]
+    {
+        if( hashes.length === 0 ) return [];
+
+        nTxs = nTxs ?? this._getTxNumber();
+        const filtered: ([ hash: MempoolTxHash, idx: number ])[] = [];
+        let len = 0;
+        for( let i = 0; i < nTxs; i++ )
+        {
+            const realHash = new Int32Array(
+                this._readTxHashAtBI( i ).buffer
+            ) as MempoolTxHash;
+            if( hashes.some( hash => eqMempoolTxHash( hash, realHash ) ) )
+            {
+                insertSortedHash( filtered, [ realHash, i ] );
+                if(
+                    ++len === hashes.length
+                ) break;
+            }
+        }
+        return filtered;
     }
 
     private async _initAppend(): Promise<void>
@@ -483,7 +546,11 @@ export class SharedMempool
         }
 
         // actually write the tx and hash
-        const lastTxIndex = this._readTxIndexAt( nTxs - 1 );
+        const lastTxIndex = (
+            nTxs <= 0 ? 
+            { index: 0, size: 0 } as MempoolIndex :
+            this._readTxIndexAt( nTxs - 1 )
+        );
         const thisTxIndexStart = lastTxIndex.index + lastTxIndex.size;
 
         this._writeTxHashAt( nTxs, new BigUint64Array( hash.buffer ) as MempoolTxHashBI );
