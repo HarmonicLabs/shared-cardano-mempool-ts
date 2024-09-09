@@ -41,7 +41,15 @@ export interface SharedMempoolConfig extends SharedMempoolArgs
     startTxsU8: number,
 }
 
-export class SharedMempool
+export interface IMempool {
+    getTxNumber(): Promise<number>;
+    readTxHashes(): Promise<U8Arr32[]>;
+    readTxs( hashes: MempoolTxHashLike[] ): Promise<MempoolTx[]>;
+    append( hash: MempoolTxHashLike, tx: Uint8Array ): Promise<MempoolAppendResult>;
+    drop( hashes: MempoolTxHashLike[] ): Promise<void>;
+}
+
+export class SharedMempool implements IMempool
 {
     private readonly sharedMemory: SharedArrayBuffer;
     private readonly bi64View: BigUint64Array;
