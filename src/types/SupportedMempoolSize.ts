@@ -1,6 +1,4 @@
 
-export const TX_HASH_SIZE = 32 as const;
-
 export type SupportedMempoolSize
     = 32768     // 32KB
     | 65536     // 64KB
@@ -20,13 +18,17 @@ export function isSupportedMempoolSize(value: any): value is SupportedMempoolSiz
 
 export function getMaxTxAllowed( size: SupportedMempoolSize ): number
 {
+    // only odd max txs
+    // to always allign memory as multiple of 8 ( 64 bit reads )
+    // the first index is awlays omitted ( implicit )
+    // so odd max txs => even n of indexes
     switch( size )
     {
-        case 32768: return 64;
-        case 65536: return 128;
+        case 32768: return 63;
+        case 65536: return 127;
 
         case 131072:
-        case 262144: return 255;
+        case 262144: return 255; 
         default: throw new Error(`Invalid SupportedMempoolSize: ${size}`);
     }
 }

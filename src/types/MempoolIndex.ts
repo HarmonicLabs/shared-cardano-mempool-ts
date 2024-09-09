@@ -1,5 +1,5 @@
 
 export interface MempoolIndex {
-    index: number;
+    start: number;
     size: number;
 }

@@ -1,0 +1,44 @@
+import { IMempool, SharedMempool } from "../SharedMempool";
+import { IndexedHash } from "../types/IndexedHash";
+import { MempoolIndex } from "../types/MempoolIndex";
+import { MempoolTxHashBI, MempoolTxHash, MempoolTxHashLike } from "../types/MempoolTxHash";
+
+export type PrivateMempool = _PrivateMempool;
+export interface _PrivateMempool extends IMempool {
+    _readTxIndexAt( i: number ): MempoolIndex;
+    _writeTxIndexAt( i: number, index: MempoolIndex ): void;
+    _readTxHashAtBI( i: number ): MempoolTxHashBI;
+    _writeTxHashAt( i: number, hash: MempoolTxHashBI ): void;
+    _unsafe_readTxHashesBuff(): Uint8Array;
+    _unsafe_writeTxAt( i: number, tx: Uint8Array ): void;
+    _readTxHashesBI(): MempoolTxHashBI[];
+    _unsafe_filterByHashPresent( hashes: MempoolTxHash[], nTxs?: number ): IndexedHash[];
+    _filterByHashPresent( hashes: MempoolTxHash[], nTxs?: number ): IndexedHash[];
+    _moveTx( from: number, to: number, toIndex: MempoolIndex ): void;
+    _incrementReadingPeers(): void;
+    _decrementReadingPeers(): void;
+    _incrementTxCount(): void;
+    _makeSureNoDrop(): void | Promise<void>;
+    _getReadingPeers(): number;
+    _makeSureNoReadingPeers(): Promise<void>;
+    _incrementAppendQueue(): number;
+    _decrementAppendQueue(): number;
+    _waitAppendQueue(): Promise<void>;
+    _isHashPresent( hash: MempoolTxHash, nTxs?: number ): boolean;
+    _initAppend(): Promise<void>;
+    _deinitAppend(): void;
+    _initDrop(): Promise<void>;
+    _deinitDrop(): void;
+    _writeAviableSpace( n: number ): void;
+    _readAviableSpace(): number;
+    _decrementAviableSpace( n: number ): void;
+    _getAppendInfos(): [ nTxs: number, aviableSpace: number ];
+    _readAviableSpace(): number;
+    _unsafe_write( offset: number, data: Uint8Array ): void;
+    _unsafe_read( offset: number, length: number ): Uint8Array;
+    _read( offset: number, length: number ): Uint8Array;
+    _readAllIndexes(): MempoolIndex[];
+    _getTxCount(): number;
+    _getOnlyPresentHashesIndexes( hashes: MempoolTxHashLike[] ): Promise<MempoolTxHash[]>;
+    reorg(): void;
+}
