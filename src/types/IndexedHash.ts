@@ -1,4 +1,4 @@
-import { MempoolTxHash } from "./MempoTxHash";
+import { MempoolTxHash } from "./MempoolTxHash";
 
 export type IndexedHash = [ hash: MempoolTxHash, idx: number ];
 

@@ -5,7 +5,25 @@ export type U8Arr32 = U8Arr<32>;
 export type MempoolTxHashBI = BigUint64Array & { length: 4 }; // 32 bytes
 export type MempoolTxHash = Int32Array & { length: 8 }; // 32 bytes
 
-export type MempoolTxHashLike = U8Arr32 | MempoolTxHash | MempoolTxHashBI
+export type MempoolTxHashLike = U8Arr32 | MempoolTxHash | MempoolTxHashBI;
+
+export function isMempoolTxHashLike( hashLike: any ): hashLike is MempoolTxHashLike
+{
+    return (
+        (
+            hashLike instanceof Uint8Array &&
+            hashLike.length === 32
+        ) ||
+        (
+            hashLike instanceof Int32Array &&
+            hashLike.length === 8
+        ) ||
+        (
+            hashLike instanceof BigUint64Array &&
+            hashLike.length === 4
+        )
+    );
+}
 
 export function forceMempoolTxHash( hashLike: MempoolTxHashLike ): MempoolTxHash
 {
