@@ -2,7 +2,9 @@ import { getMaxTxAllowed, isSupportedMempoolSize, SupportedMempoolSize } from ".
 import { IndexedHash, insertSortedHash } from "./types/IndexedHash";
 import { MempoolAppendResult, MempoolAppendStatus } from "./types/MempoolAppendResult";
 import { MempoolIndex } from "./types/MempoolIndex";
+import { MempoolTx } from "./types/MempoolTx";
 import { eqMempoolTxHash, forceMempoolTxHash, MempoolTxHash, MempoolTxHashBI, MempoolTxHashLike, U8Arr32 } from "./types/MempoTxHash";
+import { concatUint8Arr } from "./utils/concatUint8Arr";
 import { unwrapWaitAsyncResult } from "./utils/unwrapWaitAsyncResult";
 
 const hasSharedArrayBuffer = typeof globalThis.SharedArrayBuffer !== 'undefined';
@@ -23,7 +25,7 @@ const APPEND_QUEQUE_IDX_I32 = 3;
 const APPEND_BYTES_IDX_U8 = APPEND_BYTES_IDX_I32 * 4;
 const AVIABLE_SPACE_IDX_U8 = APPEND_BYTES_IDX_U8 + 1;
 
-export interface SharedMempoolArgs  s{
+export interface SharedMempoolArgs {
     
 }
 
@@ -232,10 +234,6 @@ export class SharedMempool
         Atomics.store( this.bi64View, ++offset, hash[3] );
     }
 
-    private _readTxAt( i: number, length: number ): Uint8Array
-    {
-    }
-
     /**
      * UNSAFE
      * 
@@ -331,7 +329,7 @@ export class SharedMempool
         return new Uint8Array( buff, 0, length );
     }
 
-    private _readTxs( hashes: MempoolTxHash[] ): [ buffs: Uint8Array[], indexes: MempoolIndex[], continousReads: MempoolIndex[] ] | []
+    private _readTxs( hashes: MempoolTxHash[] ): [ buffs: Uint8Array[], indexes: MempoolIndex[], indexedHashes: IndexedHash[] ] | []
     {
         const nTxs = this._getTxNumber();
         const indexedHashes = this._filterByHashPresent( hashes, nTxs );
@@ -357,10 +355,10 @@ export class SharedMempool
 
         const buffs = continousReads.map( ({ index, size }) => this._continousRead( index, size ));
         
-        return [ buffs, indexes, continousReads ];
+        return [ buffs, indexes, indexedHashes ];
     }
 
-    async readTxs( hashes: MempoolTxHashLike[] ): Promise<Uint8Array[]>
+    async readTxs( hashes: MempoolTxHashLike[] ): Promise<MempoolTx[]>
     {
         if( hashes.length === 0 ) return [];
         hashes = hashes.map( forceMempoolTxHash );
@@ -372,7 +370,26 @@ export class SharedMempool
         this.decrementReadingPeers();
 
         if( _txs.length === 0 ) return [];
-        const [ buffs, indexes, continousReads ] = _txs;
+        const [ buffs, indexes, indexedHashes ] = _txs;
+
+        const buff = concatUint8Arr( buffs );
+        let offset = 0;
+        const txs = new Array<MempoolTx>( indexes.length );
+        let hashView: Uint8Array; 
+        for( let i = 0; i < indexes.length; i++ )
+        {
+            const { size } = indexes[i];
+            const hash = new Uint8Array( 32 ) as U8Arr32
+            hashView = new Uint8Array( indexedHashes[i][0].buffer );
+            hash.set( hashView );
+            txs[i] = {
+                hash,
+                bytes: new Uint8Array( buff.buffer, offset, size )
+            };
+            offset += size;
+        }
+
+        return txs;
     }
 
     private _incrementAppendQueue(): number
@@ -554,6 +571,9 @@ export class SharedMempool
         const thisTxIndexStart = lastTxIndex.index + lastTxIndex.size;
 
         this._writeTxHashAt( nTxs, new BigUint64Array( hash.buffer ) as MempoolTxHashBI );
+        // UNSAFE WRITE
+        // writes without lock (no `Atomics`)
+        // this should be fine since only one append is allowed at a time
         this._unsafe_writeTxAt( thisTxIndexStart, tx );
         this._writeTxIndexAt(
             nTxs,
