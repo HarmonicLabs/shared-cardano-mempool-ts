@@ -6,6 +6,7 @@ import { MempoolTx } from "./types/MempoolTx";
 import { eqMempoolTxHash, forceMempoolTxHash, isMempoolTxHash, isMempoolTxHashLike, MempoolTxHash, MempoolTxHashBI, MempoolTxHashLike, U8Arr32 } from "./types/MempoolTxHash";
 import { concatArrayBuffs, concatUint8Arr } from "./utils/concatUint8Arr";
 import { unwrapWaitAsyncResult } from "./utils/unwrapWaitAsyncResult";
+import { groupConsecutiveTxs } from "./utils/groupConsecutiveTxs";
 
 
 export interface SharedMempoolArgs {
@@ -440,11 +441,44 @@ export class SharedMempool implements IMempool
             this._writeAviableSpace(
                 this.config.size - this.config.startTxsU8
             );
+            this._writeTxCount( 0 );
             this._deinitDrop();
             return;
         }
         
+        // TODO: acutal drop
+        const nTxsToDrop = indexedHashes.length;
+        const indexes = indexedHashes.map( ([ _hash, idx ]) => this._readTxIndexAt( idx ));
+        const freeSpace = indexes.reduce( (acc, { size }) => acc + size, 0 );
 
+        // if all the txs to remove are at the end
+        if( indexedHashes[0][1] === nTxs - nTxsToDrop )
+        {
+            // this is all we need to do
+            // since all transactions remaining are already alligned to the start
+            this._subTxCount( nTxsToDrop );
+            this._writeAviableSpace( aviableSpace - freeSpace )
+            this._deinitDrop();
+            return;
+        }
+
+        const groups = groupConsecutiveTxs( indexedHashes, indexes );
+
+        let currAviableSpace = aviableSpace;
+        let currNTxs = nTxs;
+
+        // from second last to second
+        // last has special treatment
+        // the first has special threatment
+        for( let i = groups.length - 2; i > 0; i-- )
+        {
+            const { firstIdx, txs, start, size } = groups[i];
+
+        }
+
+
+        this._subTxCount( nTxsToDrop );
+        this._writeAviableSpace( aviableSpace - freeSpace )
         this._deinitDrop();
     }
 
@@ -480,6 +514,14 @@ export class SharedMempool implements IMempool
         return [ buffs, indexes, indexedHashes ];
     }
 
+    /**
+     * 
+     * @returns {IndexedHash[]}
+     * the hashes that are actually present in the mempool
+     * paired with their index in the ordered txs
+     * 
+     * the elements are sorted by index
+     */
     private _unsafe_filterByHashPresent( hashes: MempoolTxHash[], nTxs: number ): IndexedHash[]
     {
         if( hashes.length === 0 ) return [];
@@ -507,6 +549,8 @@ export class SharedMempool implements IMempool
             const realHash = realHashes[i];
             if( hashes.some( hash => eqMempoolTxHash( hash, realHash ) ) )
             {
+                // IMPORTANT
+                // always sort by index
                 insertSortedHash( filtered, [ realHash, i ] );
                 if( // found all
                     ++len === hashes.length
@@ -599,6 +643,14 @@ export class SharedMempool implements IMempool
     private _incrementTxCount(): void
     {
         Atomics.add( this.u8View, TX_COUNT_U8_OFFSET, 1 );
+    }
+    private _subTxCount( n: number ): void
+    {
+        Atomics.sub( this.u8View, TX_COUNT_U8_OFFSET, n );
+    }
+    private _writeTxCount( n: number ): void
+    {
+        Atomics.store( this.u8View, TX_COUNT_U8_OFFSET, n );
     }
 
     private _makeSureNoDrop(): void | Promise<void>
@@ -925,6 +977,7 @@ export class SharedMempool implements IMempool
     }
     private _decrementAviableSpace( decr: number ): void
     {
+        // cannot sub because not alligned
         this._writeAviableSpace( this._readAviableSpace() - decr );
     }
 }

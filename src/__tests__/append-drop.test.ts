@@ -60,16 +60,38 @@ describe("append-drop", ()=> {
         }
     });
 
-    test("drop last", async () => {
-        const hs = await mempool.getTxHashesAndSizes();
-        const hashes = hs.map( ({ hash }) => hash );
-        const sizes = hs.map( ({ size }) => size );
-
-        const { hash, size: txSize } = hs.pop()!
+    test("drop inexistent", async () => {
+        const { hash } = getTx( randSize() );
         await mempool.drop([ hash ]);
-        expectedAviableSpace -= txSize;
-        nTxs--;
         expect( await mempool.getTxCount() ).toBe( nTxs );
         expect( mempool._readAviableSpace() ).toBe( expectedAviableSpace );
     });
+
+    test("drop last", async () => {
+        const hs = await mempool.getTxHashesAndSizes();
+
+        const { hash, size: txSize } = hs[ hs.length - 1 ];
+
+        await mempool.drop([ hash ]);
+        expectedAviableSpace -= txSize;
+        nTxs--;
+
+        expect( await mempool.getTxCount() ).toBe( nTxs );
+        expect( mempool._readAviableSpace() ).toBe( expectedAviableSpace );
+        expect( await mempool.getTxHashesAndSizes() ).toEqual( hs.slice( 0, hs.length - 1 ) );
+    });
+
+    test("drpo first", async () => {
+        const hs = await mempool.getTxHashesAndSizes();
+
+        const { hash, size: txSize } = hs[ 0 ];
+
+        await mempool.drop([ hash ]);
+        expectedAviableSpace -= txSize;
+        nTxs--;
+
+        expect( await mempool.getTxCount() ).toBe( nTxs );
+        expect( mempool._readAviableSpace() ).toBe( expectedAviableSpace );
+        expect( await mempool.getTxHashesAndSizes() ).toEqual( hs.slice( 1 ) );
+    })
 });

@@ -23,6 +23,8 @@ export interface _PrivateMempool extends IMempool {
     _incrementReadingPeers(): void;
     _decrementReadingPeers(): void;
     _incrementTxCount(): void;
+    _subTxCount( n: number ): void;
+    _writeTxCount( n: number ): void;
     _makeSureNoDrop(): void | Promise<void>;
     _getReadingPeers(): number;
     _makeSureNoReadingPeers(): Promise<void>;
