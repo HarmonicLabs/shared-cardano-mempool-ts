@@ -5,6 +5,11 @@ import { MempoolTxHashBI, MempoolTxHash, MempoolTxHashLike } from "../types/Memp
 
 export type PrivateMempool = _PrivateMempool;
 export interface _PrivateMempool extends IMempool {
+    readonly sharedMemory: SharedArrayBuffer;
+    readonly bi64View: BigUint64Array;
+    readonly int32View: Int32Array;
+    readonly u32View: Uint32Array;
+    readonly u8View: Uint8Array;
     _readTxIndexAt( i: number ): MempoolIndex;
     _writeTxIndexAt( i: number, index: MempoolIndex ): void;
     _readTxHashAtBI( i: number ): MempoolTxHashBI;

@@ -12,12 +12,13 @@ describe("Mempool write and read", () => {
 
     const initialAviableSpace = mempool._readAviableSpace();
 
+    const size = 512;
+
     const hash = new Int32Array( 8 ).fill( 0xffffffff );
-    const tx = new Uint8Array( 128 ).fill( 0xaa );
+    const tx = new Uint8Array( size ).fill( 0xaa );
 
     const hash2 = new Int32Array( 8 ).fill( 0xbbbbbbbb );
-    const tx2 = new Uint8Array( 128 ).fill( 0xcc );
-
+    const tx2 = new Uint8Array( size ).fill( 0xcc );
 
     test("0 tx in mempool", async () => {
         expect( await mempool.getTxCount() ).toBe( 0 );
@@ -43,6 +44,14 @@ describe("Mempool write and read", () => {
         
         expect( hashes.length ).toBe( 1 );
         expect( hashes[0] ).toEqual( hash );
+    });
+
+    test("correct tx size", async () => {
+            
+        const hashes = await mempool.getTxHashesAndSizes();
+        
+        expect( hashes.length ).toBe( 1 );
+        expect( hashes[0] ).toEqual({ hash, size });
     });
 
     test("read single tx", async () => {
@@ -88,6 +97,14 @@ describe("Mempool write and read", () => {
         expect( hashes[1] ).toEqual( hash2 );
     });
 
+    test("correct 2 sizes", async () => {
+        const hashes = await mempool.getTxHashesAndSizes();
+        
+        expect( hashes.length ).toBe( 2 );
+        expect( hashes[0] ).toEqual({ hash, size });
+        expect( hashes[1] ).toEqual({ hash: hash2, size });
+    });
+
     test("read single tx 2", async () => {
 
         const txs = await mempool.getTxs([ hash2 ]);
@@ -101,4 +118,46 @@ describe("Mempool write and read", () => {
         } as MempoolTx);
 
     });
+
+    test("correct tx hashes 2", async () => {
+        
+        const hashes = await mempool.getTxHashes();
+        
+        expect( hashes.length ).toBe( 2 );
+        expect( hashes ).toEqual([ hash, hash2 ]);
+    });
+
+    test("correct sizes", async () => {
+
+        expect( await mempool.getTxCount() ).toBe( 2 );
+        
+        const hashes = await mempool.getTxHashesAndSizes();
+        
+        expect( hashes.length ).toBe( 2 );
+        // expect( hashes[0] ).toEqual({ hash, size });
+        expect( hashes[1] ).toEqual({ hash: hash2, size });
+    });
+
+    test("append same", async () => {
+
+        const appendResult = await mempool.append( hash, tx );
+
+        console.log( appendResult );
+        expect( appendResult.status ).toBe( MempoolAppendStatus.AlreadyPresent );
+        expect( appendResult.nTxs ).toBe( 2 );
+        expect( appendResult.aviableSpace ).toBe( initialAviableSpace - tx.length - tx2.length );
+
+    });
+
+    test("same mempool state", async () => {
+
+        expect( await mempool.getTxCount() ).toBe( 2 );
+        
+        const hashes = await mempool.getTxHashesAndSizes();
+        
+        expect( hashes.length ).toBe( 2 );
+        expect( hashes ).toEqual([ { hash, size }, { hash: hash2, size } ]);
+
+    });
+
 })

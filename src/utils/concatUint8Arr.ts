@@ -11,3 +11,8 @@ export function concatUint8Arr( arrays: Uint8Array[] ): Uint8Array
     }
     return result;
 }
+
+export function concatArrayBuffs( arrays: ArrayBuffer[] ): Uint8Array
+{
+    return concatUint8Arr( arrays.map( arr => new Uint8Array( arr ) ) );
+}
