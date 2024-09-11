@@ -408,9 +408,11 @@ export class SharedMempool implements IMempool
 
     async drop( hashes: MempoolTxHashLike[] ): Promise<void>
     {
-        hashes = hashes.filter( isMempoolTxHashLike ).map( forceMempoolTxHash );
-
-        await this._initDrop();
+        { // initPromise scope
+            const initPromise = this._initDrop();
+            hashes = hashes.filter( isMempoolTxHashLike ).map( forceMempoolTxHash );
+            await initPromise;
+        }
 
         const [ nTxs, aviableSpace ] = this._getAppendInfos();
 
@@ -545,20 +547,17 @@ export class SharedMempool implements IMempool
      */
     private async _initDrop(): Promise<void>
     {
-        let someoneElseIsDropping = false;
-        while( !someoneElseIsDropping )
-        {
-            await this._makeSureNoDrop();
-            // stores `PERFORMING_DROP` **ONLY IF** `NOT_PERFORMING_DROP` was there
-            // if instead `PERFORMING_DROP` was already there, it returns `PERFORMING_DROP`
-            const oldState = Atomics.compareExchange(
-                this.int32View,
-                0,
-                NOT_PERFORMING_DROP, // expected value
-                PERFORMING_DROP // value to store (if expected value is there)
-            );
-            someoneElseIsDropping = oldState !== NOT_PERFORMING_DROP;
-        }
+        await this._makeSureNoDrop();
+
+        // stores `PERFORMING_DROP` **ONLY IF** `NOT_PERFORMING_DROP` was there
+        // if instead `PERFORMING_DROP` was already there, it returns `PERFORMING_DROP`
+        const oldState = Atomics.compareExchange(
+            this.int32View,
+            0,
+            NOT_PERFORMING_DROP, // expected value
+            PERFORMING_DROP // value to store (if expected value is there)
+        );
+        if( oldState !== NOT_PERFORMING_DROP ) return this._initDrop();
 
         await this._makeSureNoReadingPeers();
 
@@ -577,11 +576,6 @@ export class SharedMempool implements IMempool
         Atomics.store( this.int32View, 0, NOT_PERFORMING_DROP );
         Atomics.notify( this.int32View, 0 );
         this._decrementReadingPeers();
-    }
-
-    private reorg()
-    {
-
     }
 
     /**

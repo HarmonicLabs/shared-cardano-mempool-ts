@@ -4,7 +4,6 @@ import { MempoolAppendStatus } from "../types/MempoolAppendResult";
 import { MempoolTx } from "../types/MempoolTx";
 import { mempoolTxHashFromString, mempoolTxHashToString } from "../types/MempoolTxHash";
 import { randTx } from "../__test_utils__/randTx";
-import exp from "constants";
 
 const knownHashes = new Map<string, MempoolTx>();
 

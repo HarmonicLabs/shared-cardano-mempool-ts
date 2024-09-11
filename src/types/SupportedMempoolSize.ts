@@ -1,4 +1,13 @@
 
+export enum MempoolSize {
+    kb32 = 32768,
+    kb64 = 65536,
+    kb128 = 131072,
+    kb256 = 262144
+}
+
+Object.freeze( MempoolSize );
+
 export type SupportedMempoolSize
     = 32768     // 32KB
     | 65536     // 64KB
