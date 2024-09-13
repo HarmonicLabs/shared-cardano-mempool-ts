@@ -18,7 +18,8 @@
     "test:debug": "node --nolazy --inspect-brk ./node_modules/jest/bin/jest.js --runInBand --colors --verbose",
     "clear-jest": "jest --clearCache",
     "test-watch": "jest --watchman",
-    "test-coverage": "jest --coverage",    "build": "rm -rf ./dist && tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json",
+    "test-coverage": "jest --coverage",
+    "build": "rm -rf ./dist && tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json",
     "build:light": "tsc --project ./tsconfig.json && tsc-alias -p ./tsconfig.json",
     "buidl": "npm run build",
     "ci": "npm i && npm run test && npm run build",
@@ -26,16 +27,8 @@
     "start:light": "node --enable-source-maps dist/index.js",
     "dbg": "node --trace_gc --max-old-space-size=24576 --enable-source-maps dist/index.js",
     "pub": "npm run ci && npm pub",
-    "test:onchain": "cd ./packages/onchain && npm run test",
-    "build:onchain": "cd ./packages/onchain && npm run build",
-    "buidl:onchain": "cd ./packages/onchain && npm run buidl",
-    "ci:onchain": "cd ./packages/onchain && npm run ci",
-    "pub:onchain": "cd ./packages/onchain && npm run ci && npm pub",
-    "test:offchain": "cd ./packages/offchain && npm run test",
-    "build:offchain": "cd ./packages/offchain && npm run build",
-    "buidl:offchain": "cd ./packages/offchain && npm run buidl",
-    "ci:offchain": "cd ./packages/offchain && npm run ci",
-    "pub:offchain": "cd ./packages/offchain && npm run ci && npm pub"
+    "bench:task": "npx tsx src/__bench__/task-workers/index.ts",
+    "bench:simulation": "npx tsx src/__bench__/task-workers/index.ts"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org"

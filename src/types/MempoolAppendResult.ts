@@ -13,3 +13,12 @@ export interface MempoolAppendResult {
     nTxs: number;
     aviableSpace: number;
 }
+
+export function mempoolAppendResultToJson( res: MempoolAppendResult )
+{
+    return {
+        staus: MempoolAppendStatus[ res.status ],
+        nTxs: res.nTxs,
+        aviableSpace: res.aviableSpace,
+    };
+}

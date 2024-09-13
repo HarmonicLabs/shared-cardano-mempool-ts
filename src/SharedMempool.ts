@@ -457,15 +457,28 @@ export class SharedMempool implements IMempool
             // this is all we need to do
             // since all transactions remaining are already alligned to the start
             this._subTxCount( nTxsToDrop );
-            this._writeAviableSpace( aviableSpace - freeSpace )
+            this._writeAviableSpace( aviableSpace + freeSpace )
             this._deinitDrop();
             return;
         }
 
         const groups = groupConsecutiveTxs( indexedHashes, memIndexesToDrop );
 
+        console.log("groups", groups);
+        
         let currAviableSpace = aviableSpace;
         let currNTxs = nTxs;
+    
+        // if last group is at the end
+        if(
+            groups[groups.length - 1].firstIdx + groups[groups.length - 1].txs
+            === nTxs
+        )
+        {
+            const { firstIdx, txs, size } = groups.pop()!;
+            currNTxs -= txs;
+            currAviableSpace += size;
+        }
 
         // from last to first
         // to make sure we don't overwrite useful stuff
@@ -492,14 +505,36 @@ export class SharedMempool implements IMempool
                 to,
                 currNTxs - from // number of txs after the removed ones
             );
+            // size of the bytes to move
+            const moveTxsSize = (
+                this.config.size // entire memory size
+                - (start + size) // all space after the dropped txs 
+                - currAviableSpace // space actually used by txs
+            );
+
+            if( moveTxsSize <= 0 )
+            {
+                throw new Error(
+                    "Invalid moveTxsSize: " +
+                    JSON.stringify({
+                        start,
+                        size,
+                        cfg_size: this.config.size,
+                        cfg_startTxsU8: this.config.startTxsU8,
+                        start_plus_size: start + size,
+                        currAviableSpace,
+                        moveTxsSize,
+                        groups,
+                        groups_i: i,
+                        currNTxs
+                    }, undefined, 2) 
+                );
+            };
+
             this._moveTxs(
                 start + size,   // from the end of the one to drop
                 start,          // to the start (to overwrite)
-                // size of the bytes to move
-                this.config.size // entire memory size
-                - this.config.startTxsU8 // space allocated for all txs
-                - start - size // all space after the dropped txs 
-                - currAviableSpace // space actually used by txs
+                moveTxsSize
             );
             currNTxs -= txs;
             currAviableSpace += size;
@@ -522,7 +557,6 @@ export class SharedMempool implements IMempool
 
     private _unsafe_move( from: number, to: number, size: number ): void
     {
-        // if( from === to ) return;
         this._unsafe_write(
             to,
             new Uint8Array( this._unsafe_read( from, size ) )
@@ -726,7 +760,7 @@ export class SharedMempool implements IMempool
         const { async, value } = Atomics.waitAsync(
             this.int32View,
             0,
-            PERFORMING_DROP,
+            PERFORMING_DROP as any,
             3000 // 3 seconds timeout
             // (`drop` might wait 1 seconds for reading peers to finish)
         );
@@ -744,7 +778,7 @@ export class SharedMempool implements IMempool
                 Atomics.waitAsync(
                     this.int32View,
                     READING_PEERS_I32_IDX,
-                    currentReadingPeers,
+                    currentReadingPeers as any,
                     1000 // 1 second timeout
                 )
             );
@@ -997,7 +1031,7 @@ export class SharedMempool implements IMempool
                 Atomics.waitAsync(
                     this.int32View,
                     APPEND_QUEQUE_I32_IDX,
-                    otherInQueque + 1
+                    otherInQueque + 1 as any
                     // no timeout, we wait until all the other appends finish
                 )
             );

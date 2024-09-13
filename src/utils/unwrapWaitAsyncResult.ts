@@ -1,5 +1,6 @@
 
-export type WaitAsyncResult = { async: false; value: "not-equal" | "timed-out"; } | { async: true; value: Promise<"ok" | "timed-out">; };
+type WaitResult = "not-equal" | "timed-out" | "ok";
+export type WaitAsyncResult = { async: false; value: WaitResult; } | { async: true; value: Promise<WaitResult>; };
 
 export async function unwrapWaitAsyncResult( { async, value }: WaitAsyncResult ): Promise<"ok" | "not-equal" | "timed-out">
 {
