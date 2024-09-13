@@ -142,7 +142,6 @@ describe("Mempool write and read", () => {
 
         const appendResult = await mempool.append( hash, tx );
 
-        console.log( appendResult );
         expect( appendResult.status ).toBe( MempoolAppendStatus.AlreadyPresent );
         expect( appendResult.nTxs ).toBe( 2 );
         expect( appendResult.aviableSpace ).toBe( initialAviableSpace - tx.length - tx2.length );

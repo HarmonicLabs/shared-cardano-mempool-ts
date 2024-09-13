@@ -72,6 +72,7 @@
   "exclude": [
     "**/__tests__/**/*",
     "**/__test_utils__/**/*",
+    "**/__bench__/**/*",
     "**/*.test.ts",
     "jest_cache",
     "tsc-out",

@@ -12,6 +12,7 @@ export interface _PrivateMempool extends IMempool {
     readonly u8View: Uint8Array;
     _readTxIndexAt( i: number ): MempoolIndex;
     _writeTxIndexAt( i: number, index: MempoolIndex ): void;
+    _writeConsecutiveMemIndexes( from: number, indexes: MempoolIndex[], toAdd?: number ): void
     _readTxHashAtBI( i: number ): MempoolTxHashBI;
     _writeTxHashAt( i: number, hash: MempoolTxHashBI ): void;
     _unsafe_readTxHashesBuff(): Uint8Array;
@@ -44,7 +45,6 @@ export interface _PrivateMempool extends IMempool {
     _unsafe_write( offset: number, data: Uint8Array ): void;
     _unsafe_read( offset: number, length: number ): Uint8Array;
     _read( offset: number, length: number ): Uint8Array;
-    _readAllIndexes(): MempoolIndex[];
     _getTxCount(): number;
     _getOnlyPresentHashesIndexes( hashes: MempoolTxHashLike[] ): Promise<MempoolTxHash[]>;
     reorg(): void;

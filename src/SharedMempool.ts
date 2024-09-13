@@ -282,7 +282,6 @@ export class SharedMempool implements IMempool
             start: this.config.startTxsU8,
             size: buff[0] - this.config.startTxsU8
         };
-        nTxs--
         for( let i = 1; i < nTxs; i++ )
         {
             indexes[i] = {
@@ -290,14 +289,14 @@ export class SharedMempool implements IMempool
                 size: buff[i] - buff[i - 1]
             };
         }
-        const lastStart = buff[nTxs - 1];
-        indexes[nTxs] = nTxs === this.config.maxTxs - 1 ? {
-            start: lastStart,
-            size: (this.config.size - lastStart) - this._readAviableSpace()
-        } : {
-            start: lastStart,
-            size: buff[nTxs] - lastStart
-        };
+        if( nTxs === this.config.maxTxs - 1 )
+        {
+            const lastStart = buff[nTxs - 1];
+            indexes[nTxs] = {
+                start: lastStart,
+                size: (this.config.size - lastStart) - this._readAviableSpace()
+            };
+        }
         return indexes;
     }
 
@@ -449,11 +448,11 @@ export class SharedMempool implements IMempool
         // TODO: acutal drop
         const nTxsToDrop = indexedHashes.length;
         const indexes = indexedHashes.map( ([ _hash, idx ]) => this._readTxIndexAt( idx ));
-        const freeSpace = indexes.reduce( (acc, { size }) => acc + size, 0 );
 
         // if all the txs to remove are at the end
         if( indexedHashes[0][1] === nTxs - nTxsToDrop )
         {
+            const freeSpace = indexes.reduce( (acc, { size }) => acc + size, 0 );
             // this is all we need to do
             // since all transactions remaining are already alligned to the start
             this._subTxCount( nTxsToDrop );
@@ -467,19 +466,66 @@ export class SharedMempool implements IMempool
         let currAviableSpace = aviableSpace;
         let currNTxs = nTxs;
 
-        // from second last to second
-        // last has special treatment
-        // the first has special threatment
-        for( let i = groups.length - 2; i > 0; i-- )
+        // from last to first
+        // to make sure we don't overwrite useful stuff
+        for(
+            let i = groups.length - 1;
+            i >= 0;
+            i--
+        )
         {
             const { firstIdx, txs, start, size } = groups[i];
+            const from = firstIdx + txs;
+            const to = firstIdx;
 
+            const moved = indexes.slice( from );
+
+            this._writeConsecutiveMemIndexes(
+                to,
+                moved,
+                -size
+            );
+
+            this._moveHashes( from, to, txs );
+            this._moveTxs(
+                start + size,   // from the end of the one to drop
+                start,          // to the start (to overwrite)
+                start + size - currAviableSpace // up to where we actually have data
+            );
+            currNTxs -= txs;
+            currAviableSpace -= size;
         }
 
-
-        this._subTxCount( nTxsToDrop );
-        this._writeAviableSpace( aviableSpace - freeSpace )
+        this._writeTxCount( currNTxs );
+        this._writeAviableSpace( currAviableSpace );
         this._deinitDrop();
+    }
+
+    private _unsafe_move( from: number, to: number, size: number ): void
+    {
+        // if( from === to ) return;
+        this._unsafe_write(
+            to,
+            new Uint8Array( this._unsafe_read( from, size ) )
+        );
+    }
+
+    private _moveHashes( from: number, to: number, nTxs: number ): void
+    {
+        this._unsafe_move(
+            this.config.startHashesU8 + (from * TX_HASH_SIZE),
+            this.config.startHashesU8 + (to * TX_HASH_SIZE),
+            nTxs * TX_HASH_SIZE
+        );
+    }
+
+    private _moveTxs( from: number, to: number, totSize: number ): void
+    {
+        this._unsafe_move(
+            this.config.startTxsU8 + from,
+            this.config.startTxsU8 + to,
+            totSize
+        );
     }
 
     private _readTxs( hashes: MempoolTxHash[] ): [ buffs: ArrayBuffer[], indexes: MempoolIndex[], indexedHashes: IndexedHash[] ] | []
@@ -708,28 +754,6 @@ export class SharedMempool implements IMempool
         return Atomics.load( this.int32View, READING_PEERS_I32_IDX );
     }
 
-    private _writeTxIndexAt( i: number, index: MempoolIndex ): void
-    {
-        if( i <= 0 )
-        {
-            Atomics.store( this.u32View, N_MUTEX_I32, this.config.startTxsU8 + index.size );
-            return;
-        }
-        if( i >= this.config.maxTxs - 1 )
-        {
-            const offset = toIndexesOffset( this.config.maxTxs - 1 );
-            Atomics.store( this.u32View, offset, index.start );
-            return;
-        }
-
-        const offset = toIndexesOffset( i );
-
-        // this tx start
-        Atomics.store( this.u32View, offset, index.start );
-        // next tx start
-        Atomics.store( this.u32View, offset + 1, index.start + index.size );
-    }
-
     private _readTxIndexAt( i: number ): MempoolIndex
     {
         if( i < 0 ) return { start: this.config.startTxsU8, size: 0 }
@@ -761,20 +785,88 @@ export class SharedMempool implements IMempool
         };
     }
 
-    private _readAllIndexes(): MempoolIndex[]
+    private _writeTxIndexAt( i: number, index: MempoolIndex ): void
     {
-        const nTxs = this._getTxCount();
-        const indexes: MempoolIndex[] = new Array( nTxs );
-
-        const finalIdx = N_MUTEX_BI64 + nTxs;
-
-        for( let offset = N_MUTEX_BI64; offset < finalIdx; offset++ )
+        if( i <= 0 )
         {
-            const i = offset - N_MUTEX_BI64;
-            indexes[i] = this._readTxIndexAt( i );
+            Atomics.store( this.u32View, N_MUTEX_I32, this.config.startTxsU8 + index.size );
+            return;
+        }
+        if( i >= this.config.maxTxs - 1 )
+        {
+            const offset = toIndexesOffset( this.config.maxTxs - 1 );
+            Atomics.store( this.u32View, offset, index.start );
+            return;
         }
 
-        return indexes;
+        const offset = toIndexesOffset( i );
+
+        // this tx start
+        Atomics.store( this.u32View, offset, index.start );
+        // next tx start
+        Atomics.store( this.u32View, offset + 1, index.start + index.size );
+    }
+
+    private _writeConsecutiveMemIndexes(
+        to: number,
+        indexes: MempoolIndex[],
+        toAdd: number = 0
+    ): void
+    {
+        const max = to + indexes.length;
+        for( let i = to, j = 0 ; i < max; i++, j++ ) 
+        {
+            indexes[j].start += toAdd;
+            this._writeTxIndexAt( i, indexes[j] );
+        }
+        /*
+        if( indexes.length < 1 ) return;
+        if( indexes.length === 1 )
+        {
+            const idx = indexes[0];
+            idx.start += toAdd;
+            this._writeTxIndexAt( to, idx );
+            return;
+        }
+        // index at 0 start is always implicit
+        if(
+            to === 0 ||
+            indexes[0].start === this.config.startTxsU8
+        )
+        {
+            to++;
+            indexes.shift();
+            if( indexes.length === 1 )
+            {
+                const idx = indexes[0];
+                idx.start += toAdd;
+                this._writeTxIndexAt( to, idx );
+                return;
+            }
+        }
+
+        let to = to + indexes.length - 1;
+        if( to >= this.config.maxTxs - 1 )
+        {
+            const idx = indexes.pop()!;
+            idx.start += toAdd;
+            this._writeTxIndexAt( this.config.maxTxs - 1, idx );
+
+            indexes = indexes.slice( 0, this.config.maxTxs - 2 - to );
+            to = to + indexes.length - 1;
+        }
+        
+        let offset = toIndexesOffset( to );
+        const upToSecondLast = toIndexesOffset( to + indexes.length - 2 );
+        for( ; offset < upToSecondLast; offset++ )
+        {
+            const index = indexes.shift()!;
+            Atomics.store( this.u32View, offset, index.start + toAdd );
+        }
+        const last = indexes.pop()!;
+        last.start += toAdd;
+        this._writeTxIndexAt( to + indexes.length - 1, last );
+        //*/
     }
 
     private _getTxCount(): number
