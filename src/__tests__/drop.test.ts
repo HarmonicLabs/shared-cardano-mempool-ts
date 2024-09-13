@@ -3,7 +3,7 @@ import { randTx } from "../__test_utils__/randTx";
 import { SharedMempool } from "../SharedMempool";
 import { MempoolAppendStatus } from "../types/MempoolAppendResult";
 import { MempoolTx } from "../types/MempoolTx";
-import { mempoolTxHashFromString, mempoolTxHashToString } from "../types/MempoolTxHash";
+import { eqMempoolTxHash, mempoolTxHashFromString, mempoolTxHashToString } from "../types/MempoolTxHash";
 import { MempoolSize } from "../types/SupportedMempoolSize";
 
 
@@ -84,25 +84,49 @@ describe("append-drop", ()=> {
 
     test("drop middle", async () => {
         const hs = await mempool.getTxHashesAndSizes();
+        const hashes = hs.map(({ hash }) => hash );
+
+        // const hashesBefore = hashes.map( mempoolTxHashToString );
 
         const { hash, size: txSize } = hs[ hs.length >>> 1 ];
 
         await mempool.drop([ hash ]);
-        expectedAviableSpace -= txSize;
+        expectedAviableSpace += txSize;
         nTxs--;
+
+        const filteredBefore = hashes.filter( h => !eqMempoolTxHash( h, hash ) )
+        .map( mempoolTxHashToString );
+
+        const hashesAfter = (await mempool.getTxHashes())
+        .map( h => mempoolTxHashToString( h ) );
+
 
         expect( await mempool.getTxCount() ).toBe( nTxs );
         expect( mempool._readAviableSpace() ).toBe( expectedAviableSpace );
-        expect( await mempool.getTxHashesAndSizes() ).toEqual( hs.slice( 0, hs.length - 1 ) );
+        expect( hashesAfter.length ).toEqual( filteredBefore.length );
+        
+        expect( hashesAfter ).toEqual( filteredBefore );
+
+        const newSizes = (await mempool.getTxHashesAndSizes()).map?.(({ size }) => size );
+        const expectedSizes = (
+            hs.filter( ({ hash: h }) => !eqMempoolTxHash( h, hash ) )
+            .map(({ size }) => size )
+        );
+
+        expect(
+            JSON.stringify( newSizes )
+        ).toEqual(
+            JSON.stringify( expectedSizes )
+        );
     });
 
-    test.skip("drop first", async () => {
+    test("drop first", async () => {
         const hs = await mempool.getTxHashesAndSizes();
 
         const { hash, size: txSize } = hs[ 0 ];
 
         await mempool.drop([ hash ]);
-        expectedAviableSpace -= txSize;
+        expectedAviableSpace += txSize;
         nTxs--;
 
         expect( await mempool.getTxCount() ).toBe( nTxs );
@@ -110,7 +134,7 @@ describe("append-drop", ()=> {
         expect( await mempool.getTxHashesAndSizes() ).toEqual( hs.slice( 1 ) );
     });
 
-    test.skip("drop all", async () => {
+    test("drop all", async () => {
         const hashes = await mempool.getTxHashes();
 
         await mempool.drop( hashes );
@@ -122,7 +146,7 @@ describe("append-drop", ()=> {
         expect( await mempool.getTxHashesAndSizes() ).toEqual( [] );
     });
 
-    test.skip("append until maxTx", async () => {
+    test("append until maxTx", async () => {
         MAX_TX_SIZE = 256;
         let status = MempoolAppendStatus.Ok;
         let txSize = 0;
@@ -132,11 +156,16 @@ describe("append-drop", ()=> {
             const { hash, bytes } = getTx( txSize );
             const appendResult = await mempool.append( hash, bytes );
             status = appendResult.status;
+            if( status === MempoolAppendStatus.Ok )
+            {
+                expect( appendResult.nTxs ).toBe( ++nTxs );
+                expect( appendResult.aviableSpace ).toBe( expectedAviableSpace -= bytes.length );
+            }
         }
         expect( await mempool.getTxCount() ).toBe( mempool.config.maxTxs );
     });
 
-    test.skip("drop middle on maxTxs", async () => {
+    test("drop middle on maxTxs", async () => {
         const hs = await mempool.getTxHashes();
 
         const hash = hs[ hs.length >>> 1 ];

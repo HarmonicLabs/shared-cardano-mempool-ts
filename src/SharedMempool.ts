@@ -447,14 +447,13 @@ export class SharedMempool implements IMempool
             return;
         }
         
-        // TODO: acutal drop
         const nTxsToDrop = indexedHashes.length;
-        const indexes = indexedHashes.map( ([ _hash, idx ]) => this._readTxIndexAt( idx ));
+        const memIndexesToDrop = indexedHashes.map( ([ _hash, idx ]) => this._readTxIndexAt( idx ));
 
         // if all the txs to remove are at the end
         if( indexedHashes[0][1] === nTxs - nTxsToDrop )
         {
-            const freeSpace = indexes.reduce( (acc, { size }) => acc + size, 0 );
+            const freeSpace = memIndexesToDrop.reduce( (acc, { size }) => acc + size, 0 );
             // this is all we need to do
             // since all transactions remaining are already alligned to the start
             this._subTxCount( nTxsToDrop );
@@ -463,7 +462,7 @@ export class SharedMempool implements IMempool
             return;
         }
 
-        const groups = groupConsecutiveTxs( indexedHashes, indexes );
+        const groups = groupConsecutiveTxs( indexedHashes, memIndexesToDrop );
 
         let currAviableSpace = aviableSpace;
         let currNTxs = nTxs;
@@ -480,7 +479,7 @@ export class SharedMempool implements IMempool
             const from = firstIdx + txs;
             const to = firstIdx;
 
-            const moved = indexes.slice( from );
+            const moved = this._readAllIndexes().slice( from );
 
             this._writeConsecutiveMemIndexes(
                 to,
@@ -488,19 +487,37 @@ export class SharedMempool implements IMempool
                 -size
             );
 
-            this._moveHashes( from, to, txs );
+            this._moveHashes(
+                from,
+                to,
+                currNTxs - from // number of txs after the removed ones
+            );
             this._moveTxs(
                 start + size,   // from the end of the one to drop
                 start,          // to the start (to overwrite)
-                start + size - currAviableSpace // up to where we actually have data
+                // size of the bytes to move
+                this.config.size // entire memory size
+                - this.config.startTxsU8 // space allocated for all txs
+                - start - size // all space after the dropped txs 
+                - currAviableSpace // space actually used by txs
             );
             currNTxs -= txs;
-            currAviableSpace -= size;
+            currAviableSpace += size;
         }
 
         this._writeTxCount( currNTxs );
         this._writeAviableSpace( currAviableSpace );
         this._deinitDrop();
+    }
+
+    private _readAllIndexes(): MempoolIndex[]
+    {
+        const nTxs = this._getTxCount();
+        if( nTxs <= 0 ) return [];
+
+        const idxBuff = this._unsafe_readTxIndexesBuff( nTxs );
+
+        return this._idxBuffToIndexes( idxBuff, nTxs );
     }
 
     private _unsafe_move( from: number, to: number, size: number ): void
