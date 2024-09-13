@@ -276,7 +276,9 @@ export class SharedMempool implements IMempool
 
     private _idxBuffToIndexes( buff: Uint32Array, nTxs: number ): MempoolIndex[]
     {
-        if( nTxs === 0 ) return [];
+        if( nTxs <= 0 ) return [];
+        nTxs = Math.min( nTxs, this.config.maxTxs ); // at most maxTxs
+
         const indexes = new Array<MempoolIndex>( nTxs );
         indexes[0] = {
             start: this.config.startTxsU8,
@@ -289,10 +291,10 @@ export class SharedMempool implements IMempool
                 size: buff[i] - buff[i - 1]
             };
         }
-        if( nTxs === this.config.maxTxs - 1 )
+        if( nTxs >= this.config.maxTxs )
         {
-            const lastStart = buff[nTxs - 1];
-            indexes[nTxs] = {
+            const lastStart = buff[nTxs - 2];
+            indexes[nTxs - 1] = {
                 start: lastStart,
                 size: (this.config.size - lastStart) - this._readAviableSpace()
             };

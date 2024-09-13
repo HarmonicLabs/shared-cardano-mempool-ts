@@ -73,11 +73,12 @@ describe("Mempool write and read", () => {
     
         });
     
-        test("read maxTx - 1", async () => {
+        test("read maxTx", async () => {
+            expect( await mempool.getTxCount() ).toBe( maxTxs );
             expect( await mempool.getAviableSpace() ).toBe( expectedAviableSpace );
             expect( await mempool.getTxHashes() ).toEqual( [ ...knownHashes.keys() ].map( mempoolTxHashFromString ) );
     
-            expect( (await mempool.getTxHashesAndSizes()).map(({ size }) => size) )
+            expect( (await mempool.getTxHashesAndSizes()).map(({ size }) => size ))
             .toEqual( [ ...knownHashes.values() ] );
         });
     });
