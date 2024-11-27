@@ -126,7 +126,7 @@ export class SharedMempool implements IMempool
             size - mempool.config.startTxsU8
         );
 
-        return new SharedArrayBuffer( size );
+        return buff;
     }
 
     constructor(
