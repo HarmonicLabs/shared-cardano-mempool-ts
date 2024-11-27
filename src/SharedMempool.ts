@@ -464,8 +464,6 @@ export class SharedMempool implements IMempool
 
         const groups = groupConsecutiveTxs( indexedHashes, memIndexesToDrop );
 
-        console.log("groups", groups);
-        
         let currAviableSpace = aviableSpace;
         let currNTxs = nTxs;
     
