@@ -13,9 +13,9 @@ export interface SharedMempoolArgs {
     
 }
 
-export const defaultConfig: SharedMempoolArgs = {
+export const defaultConfig: SharedMempoolArgs = Object.freeze({
 
-};
+});
 
 export interface SharedMempoolConfig extends SharedMempoolArgs
 {
@@ -933,21 +933,20 @@ export class SharedMempool implements IMempool
 
     private _readTxHashAt( i: number ): MempoolTxHash
     {
-        const buff = new ArrayBuffer( 32 );
-        const hash = new Int32Array( buff ) as MempoolTxHash;
-
         let offset = (this.config.startHashesU8 / 4) + ( i * 8 );
 
         const read = this._unsafe_read( offset, 32 );
+        // const buff = new ArrayBuffer( 32 );
+        const hash = new Int32Array( read ) as MempoolTxHash;
 
-        hash[0] = Atomics.load( this.int32View, offset );
-        hash[1] = Atomics.load( this.int32View, ++offset );
-        hash[2] = Atomics.load( this.int32View, ++offset );
-        hash[3] = Atomics.load( this.int32View, ++offset );
-        hash[4] = Atomics.load( this.int32View, ++offset );
-        hash[5] = Atomics.load( this.int32View, ++offset );
-        hash[6] = Atomics.load( this.int32View, ++offset );
-        hash[7] = Atomics.load( this.int32View, ++offset );
+        // hash[0] = Atomics.load( this.int32View, offset );
+        // hash[1] = Atomics.load( this.int32View, ++offset );
+        // hash[2] = Atomics.load( this.int32View, ++offset );
+        // hash[3] = Atomics.load( this.int32View, ++offset );
+        // hash[4] = Atomics.load( this.int32View, ++offset );
+        // hash[5] = Atomics.load( this.int32View, ++offset );
+        // hash[6] = Atomics.load( this.int32View, ++offset );
+        // hash[7] = Atomics.load( this.int32View, ++offset );
 
         return hash;
     }
